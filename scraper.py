@@ -7,6 +7,9 @@ from webdriver_manager.chrome import ChromeDriverManager
 import time
 import random
 from datetime import datetime
+import pandas as pd
+import os
+
 
 
 def human_pause(a=2, b=5):
@@ -71,6 +74,7 @@ for item in driver.find_elements(By.CLASS_NAME, "filter-menu-button__item"):
         break
 
 human_pause(5, 8)
+results = []
 
 
 # ================= SCRAPING =================
@@ -139,16 +143,24 @@ def process_cards():
             currency = price = None
 
         # Affichage des infos
+        data = {
+            "item_id": item_id,
+            "title": title,
+            "oem_reference": oem,
+            "price": price,
+            "currency": currency,
+            "url": item_url,
+            "seller": seller_id,
+            "listing_start_date": datetime.now(),
+            "status": "ACTIVE"
+        }
+
+        results.append(data)
+
         print("\n==============================")
-        print("item_id :", item_id)
-        print("title :", title)
-        print("OEM :", oem)
-        print("price :", price)
-        print("currency :", currency)
-        print("url :", item_url)
-        print("seller :", seller_id)
-        print("listing_start_date :", datetime.now())
-        print("status : ACTIVE")
+        for k, v in data.items():
+            print(f"{k} : {v}")
+
 
         # Fermer l'onglet et revenir à la page principale
         driver.close()
@@ -174,3 +186,14 @@ while True:
         break
 
 print("\n🎯 SCRAPING TERMINÉ AVEC SUCCÈS")
+
+if results:
+    os.makedirs("exports", exist_ok=True)
+    df = pd.DataFrame(results)
+
+    filename = f"exports/ebay_listings_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.xlsx"
+    df.to_excel(filename, index=False)
+
+    print(f"\n📁 Fichier Excel généré : {filename}")
+else:
+    print("⚠️ Aucune donnée à exporter.")
