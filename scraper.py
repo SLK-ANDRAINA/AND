@@ -1,4 +1,4 @@
-# scraper_multi_fixed.py
+# scraper_multi_fixed_export_by_seller.py
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -9,13 +9,12 @@ import time, random, sqlite3, csv, os, urllib.parse
 from datetime import datetime
 from selenium.common.exceptions import TimeoutException
 
-
 # ------------------ CONFIG / UTIL ------------------
 def human_pause(a=0.3, b=1.0):
     time.sleep(random.uniform(a, b))
 
 DB_PATH = "ebay.db"
-EXPORT_CSV = "ebay_export.csv"
+EXPORT_DIR = "export"
 
 # ------------------ DATABASE SETUP ------------------
 conn = sqlite3.connect(DB_PATH, timeout=30)
@@ -88,15 +87,26 @@ def mark_ended(scraped_ids, seller):
         print(f"⛔ ENDED : {item_id}")
     conn.commit()
 
-def export_db_to_csv(csv_path=EXPORT_CSV):
-    cursor.execute("SELECT * FROM listings")
+def export_db_to_csv_by_seller_for_single(seller, export_dir=EXPORT_DIR):
+    if not os.path.exists(export_dir):
+        os.makedirs(export_dir)
+
+    # colonnes fixes de la table
+    columns = ["id","item_id","seller","title","oem_reference","price","currency","url","listing_start_date","status","end_date"]
+    cursor.execute(f"SELECT {', '.join(columns)} FROM listings WHERE seller=?", (seller,))
     rows = cursor.fetchall()
-    columns = [desc[0] for desc in cursor.description]
+    if not rows:
+        print(f"⚠️ Aucun listing trouvé pour {seller}, export annulé.")
+        return
+
+    safe_seller = "".join(c for c in seller if c.isalnum() or c in ("_", "-")).rstrip()
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    csv_path = os.path.join(export_dir, f"{safe_seller}_{timestamp}.csv")
     with open(csv_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow(columns)
         writer.writerows(rows)
-    print(f"✅ Base exportée : {csv_path}")
+    print(f"✅ Export immédiat pour {seller}: {csv_path}")
 
 # ------------------ SELENIUM SETUP ------------------
 options = webdriver.ChromeOptions()
@@ -126,7 +136,6 @@ def safe_click(element):
             return False
 
 def extract_seller_id_from_page():
-    # try seller section
     try:
         seller_section = driver.find_element(By.CSS_SELECTOR, "section.str-about-description__seller-info")
         for line in seller_section.text.split("\n"):
@@ -134,7 +143,6 @@ def extract_seller_id_from_page():
                 return line.replace("Seller:", "").strip()
     except Exception:
         pass
-    # fallback: parse current url
     try:
         u = driver.current_url
         if "/str/" in u:
@@ -154,7 +162,6 @@ def scrape_seller(shop_url, seller_id_param=None):
     human_pause(1.0, 2.0)
 
     seller_id = seller_id_param or None
-    # try About tab if present
     try:
         about_tab = driver.find_element(By.XPATH, "//div[@role='tab' and contains(., 'About')]")
         safe_click(about_tab)
@@ -163,7 +170,6 @@ def scrape_seller(shop_url, seller_id_param=None):
         if extracted:
             seller_id = extracted
     except Exception:
-        # fallback to url parsing
         if not seller_id:
             if "/str/" in shop_url:
                 seller_id = shop_url.split("/str/")[-1].split("?")[0].strip("/")
@@ -177,12 +183,9 @@ def scrape_seller(shop_url, seller_id_param=None):
         seller_id = shop_url
 
     print("Seller ID:", seller_id)
-
-    # ensure shop main page loaded
     driver.get(shop_url)
     human_pause(0.6, 1.2)
 
-    # apply Condition filter -> Used
     used_clicked = False
     try:
         condition_button = driver.find_element(By.XPATH, "//span[contains(text(),'Condition')]")
@@ -201,32 +204,25 @@ def scrape_seller(shop_url, seller_id_param=None):
         return set()
 
     human_pause(0.6, 1.4)
-
     scraped_ids = set()
     page = 1
     while True:
         human_pause(0.6, 1.0)
         cards_xpath = (
-            "//div[contains(@class,'str-marginals') and contains(@class,'__header')]"  # header
-            "/following-sibling::*"                                                   # tous les siblings suivants
-            "//div[contains(@class,'str-item-card__header-container')]"              # cards dans ces siblings
+            "//div[contains(@class,'str-marginals') and contains(@class,'__header') and .//h2/span[contains(.,'All items')]]"
+            "/following-sibling::*//div[contains(@class,'str-item-card__header-container')]"
         )
         try:
             wait.until(EC.presence_of_element_located((By.XPATH, cards_xpath)))
         except TimeoutException:
-            # Pas de cards trouvées rapidement — on essaie quand même une recherche globale en fallback
             pass
         cards = driver.find_elements(By.XPATH, cards_xpath)
-        if not cards:
-            cards = driver.find_elements(By.CSS_SELECTOR, "div.str-item-card__header-container")
         print(f"Page {page} - {len(cards)} cartes trouvées")
         for card in cards:
             if not safe_click(card):
-                print("⚠️ impossible de cliquer sur une card => on l'ignore")
                 continue
 
             human_pause(0.8, 1.4)
-            # switch to new window if opened
             if len(driver.window_handles) > 1:
                 driver.switch_to.window(driver.window_handles[-1])
 
@@ -237,13 +233,10 @@ def scrape_seller(shop_url, seller_id_param=None):
                 if "/itm/" in item_url:
                     item_id = item_url.split("/itm/")[-1].split("?")[0]
                 else:
-                    try:
-                        meta = driver.find_element(By.CSS_SELECTOR, "meta[property='og:url']")
-                        murl = meta.get_attribute("content")
-                        if "/itm/" in murl:
-                            item_id = murl.split("/itm/")[-1].split("?")[0]
-                    except Exception:
-                        pass
+                    meta = driver.find_element(By.CSS_SELECTOR, "meta[property='og:url']")
+                    murl = meta.get_attribute("content")
+                    if "/itm/" in murl:
+                        item_id = murl.split("/itm/")[-1].split("?")[0]
             except Exception:
                 item_id = None
 
@@ -253,7 +246,6 @@ def scrape_seller(shop_url, seller_id_param=None):
             except Exception:
                 title = None
 
-            # OEM
             oem = None
             try:
                 oem = driver.find_element(By.CSS_SELECTOR, "dl.ux-labels-values--manufacturerPartNumber dd span").text
@@ -270,7 +262,12 @@ def scrape_seller(shop_url, seller_id_param=None):
                 currency = price_text.split(" ")[0] if " " in price_text else None
                 price = price_text.replace(currency, "").strip() if currency else price_text
             except Exception:
-                price = currency = None
+                try:
+                    alt_price = driver.find_element(By.CSS_SELECTOR, "div.x-additional-info__item--1 span.ux-textspans--STRIKETHROUGH").text
+                    currency = alt_price.split(" ")[0] if " " in alt_price else None
+                    price = alt_price.replace(currency, "").strip() if currency else alt_price
+                except Exception:
+                    price = currency = None
 
             if not item_id:
                 item_id = f"unknown-{abs(hash(item_url or title))}-{int(time.time())}"
@@ -288,16 +285,12 @@ def scrape_seller(shop_url, seller_id_param=None):
             save_or_update_item(data)
             scraped_ids.add(item_id)
 
-            # close/support navigation back
             try:
                 if len(driver.window_handles) > 1:
                     driver.close()
                     driver.switch_to.window(driver.window_handles[0])
                 else:
-                    try:
-                        driver.back()
-                    except Exception:
-                        pass
+                    driver.back()
             except Exception:
                 handles = driver.window_handles
                 if handles:
@@ -307,7 +300,6 @@ def scrape_seller(shop_url, seller_id_param=None):
 
         conn.commit()
 
-        # NEXT PAGE
         try:
             next_btn = driver.find_element(By.CSS_SELECTOR, "a.pagination__next")
             if not next_btn.is_displayed():
@@ -315,7 +307,6 @@ def scrape_seller(shop_url, seller_id_param=None):
             driver.execute_script("arguments[0].scrollIntoView({block:'center'});", next_btn)
             human_pause(0.3, 0.7)
             if not safe_click(next_btn):
-                # fallback click
                 try:
                     next_btn.click()
                 except Exception:
@@ -325,25 +316,22 @@ def scrape_seller(shop_url, seller_id_param=None):
         except Exception:
             break
 
-    # update seller last_scan and mark ended
     cursor.execute("UPDATE sellers SET last_scan=? WHERE seller_id=?", (datetime.now().isoformat(), seller_id))
     conn.commit()
     mark_ended(scraped_ids, seller_id)
+    export_db_to_csv_by_seller_for_single(seller_id)
     return scraped_ids
 
 # ------------------ MAIN FLOW ------------------
 def main():
     print("=== eBay Multi-seller Scraper ===")
-    # if no sellers, force the user to add at least one
     sellers = get_all_sellers()
     if not sellers:
         print("📌 Aucun vendeur enregistré. Ajout obligatoire.")
         while True:
             url = input("Colle le lien de la boutique eBay : ").strip()
             if not url:
-                print("❌ Lien invalide, recommence.")
                 continue
-            # deduce seller id
             sid = None
             if "/str/" in url:
                 sid = url.split("/str/")[-1].split("?")[0].strip("/")
@@ -356,7 +344,6 @@ def main():
             if more != "y":
                 break
 
-    # give user option to add extra sellers before running
     while True:
         extra = input("Voulez-vous ajouter un vendeur supplémentaire avant de lancer ? (y/n) ").strip().lower()
         if extra == "y":
@@ -384,7 +371,6 @@ def main():
         except Exception as e:
             print(f"❌ Erreur pendant le scraping de {seller_id}: {e}")
 
-    export_db_to_csv(EXPORT_CSV)
     print("\n✅ Tous les vendeurs traités.")
 
 if __name__ == "__main__":
