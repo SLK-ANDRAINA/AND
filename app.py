@@ -5,6 +5,8 @@ import csv
 
 # --- Configuration ---
 DB_PATH = "ebay.db"
+EXPORT_FOLDER = os.path.join("dashboard", "export")
+os.makedirs(EXPORT_FOLDER, exist_ok=True)
 
 app = Flask(
     __name__,
@@ -51,30 +53,29 @@ def kpis(seller_id):
     conn = get_db_connection()
     
     # Totals
-    total_active = conn.execute(
-        "SELECT COUNT(*) FROM listings WHERE status='ACTIVE' AND seller=?", 
-        (seller_id,)
-    ).fetchone()[0]
-    total_ended = conn.execute(
-        "SELECT COUNT(*) FROM listings WHERE status='ENDED' AND seller=?", 
-        (seller_id,)
-    ).fetchone()[0]
+    total_active = conn.execute("SELECT COUNT(*) FROM listings WHERE status='ACTIVE' AND seller=?", (seller_id,)).fetchone()[0]
+    total_ended = conn.execute("SELECT COUNT(*) FROM listings WHERE status='ENDED' AND seller=?", (seller_id,)).fetchone()[0]
 
-    # Average price, nettoyage symboles
-    rows = conn.execute(
-        "SELECT price FROM listings WHERE price IS NOT NULL AND seller=?", 
-        (seller_id,)
-    ).fetchall()
-
+    # Extraction prix et devises
+    rows = conn.execute("SELECT price FROM listings WHERE price IS NOT NULL AND seller=?", (seller_id,)).fetchall()
     prices = []
+    currencies = set()
     for row in rows:
+        price_str = row['price'].strip()
+        if not price_str:
+            continue
+        # Extraire la partie devise (tout sauf chiffres et point)
+        currency = ''.join(c for c in price_str if not c.isdigit() and c != '.')
+        amount = ''.join(c for c in price_str if c.isdigit() or c == '.')
         try:
-            cleaned = ''.join(c for c in row['price'] if c.isdigit() or c == '.')
-            prices.append(float(cleaned))
+            prices.append(float(amount))
+            if currency:
+                currencies.add(currency)
         except:
-            pass
+            continue
 
     avg_price = round(sum(prices)/len(prices), 2) if prices else 0
+    currency_display = ', '.join(currencies) if currencies else ''
 
     conn.close()
     return render_template(
@@ -82,8 +83,10 @@ def kpis(seller_id):
         seller_id=seller_id,
         total_active=total_active,
         total_ended=total_ended,
-        avg_price=avg_price
+        avg_price=avg_price,
+        currency=currency_display
     )
+
 
 # --- Export CSV ---
 @app.route('/seller/<seller_id>/export')
@@ -96,14 +99,15 @@ def export_csv(seller_id):
         return f"Aucun listing pour {seller_id}", 404
 
     filename = f"{seller_id}_export.csv"
+    filepath = os.path.join(EXPORT_FOLDER, filename)
 
-    with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
+    with open(filepath, 'w', newline='', encoding='utf-8') as csvfile:
         writer = csv.writer(csvfile)
         writer.writerow(items[0].keys())  # header
         for item in items:
             writer.writerow(item)
 
-    return send_file(filename, as_attachment=True)
+    return send_file(filepath, as_attachment=True)
 
 # --- Lancer l'application ---
 if __name__ == '__main__':

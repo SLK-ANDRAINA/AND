@@ -12,8 +12,7 @@
     <ul>
         <li>Total Actives : {{ total_active }}</li>
         <li>Total Ended : {{ total_ended }}</li>
-        <li>Prix moyen : {{ avg_price if avg_price else 'N/A' }}</li>
+        <li>Prix moyen : {{ avg_price if avg_price else 'N/A' }} {{currency}}</li>
     </ul>
-    <a href="/seller/{{ seller['seller_id'] }}/export">Télécharger Export CSV</a>
 </body>
 </html>
