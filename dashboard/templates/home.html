@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard eBay</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <h1>Dashboard eBay - Sellers</h1>
+    <ul>
+    {% for seller in sellers %}
+        <li>
+            {{ seller['seller_id'] }} :
+            <a href="/seller/{{ seller['seller_id'] }}/active">Actives</a> |
+            <a href="/seller/{{ seller['seller_id'] }}/ended">Ended</a> |
+            <a href="/seller/{{ seller['seller_id'] }}/kpis">KPIs</a> |
+            <a href="/seller/{{ seller['seller_id'] }}/export">Export CSV</a>
+        </li>
+    {% endfor %}
+    </ul>
+</body>
+</html>

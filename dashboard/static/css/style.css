@@ -1,0 +1,107 @@
+/* --- RESET / BASE --- */
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #f4f6f8;
+    margin: 0;
+    padding: 0;
+    color: #333;
+}
+
+a {
+    text-decoration: none;
+    color: #1a73e8;
+}
+
+a:hover {
+    text-decoration: underline;
+}
+
+/* --- HEADER --- */
+h1 {
+    background-color: #1a73e8;
+    color: #fff;
+    padding: 15px 20px;
+    margin: 0 0 20px 0;
+    border-bottom: 2px solid #0b4dab;
+    font-size: 1.8rem;
+}
+
+/* --- LISTES --- */
+ul {
+    list-style: none;
+    padding: 0 20px;
+}
+
+ul li {
+    padding: 10px 0;
+    border-bottom: 1px solid #ddd;
+}
+
+/* --- TABLEAUX --- */
+table {
+    width: 95%;
+    margin: 0 auto 30px auto;
+    border-collapse: collapse;
+    background-color: #fff;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+th, td {
+    padding: 10px;
+    text-align: left;
+    border-bottom: 1px solid #ddd;
+}
+
+th {
+    background-color: #1a73e8;
+    color: #fff;
+}
+
+tr:hover {
+    background-color: #f1f7ff;
+}
+
+/* --- BOUTONS / LIENS --- */
+a.button {
+    display: inline-block;
+    padding: 6px 12px;
+    margin: 5px 0;
+    background-color: #1a73e8;
+    color: #fff;
+    border-radius: 4px;
+    transition: 0.3s;
+}
+
+a.button:hover {
+    background-color: #0b4dab;
+}
+
+/* --- KPIs --- */
+ul.kpis {
+    display: flex;
+    gap: 30px;
+    padding: 0 20px;
+}
+
+ul.kpis li {
+    background-color: #fff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    font-weight: bold;
+    flex: 1;
+    text-align: center;
+    font-size: 1.1rem;
+}
+
+/* --- RESPONSIVE --- */
+@media (max-width: 768px) {
+    ul.kpis {
+        flex-direction: column;
+    }
+
+    table {
+        width: 100%;
+        font-size: 0.9rem;
+    }
+}
